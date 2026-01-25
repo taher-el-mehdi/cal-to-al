@@ -1,0 +1,124 @@
+{
+  "name": "cal-to-al",
+  "displayName": "CAL to AL Converter",
+  "description": "Convert NAV C/AL .txt files to AL Business Central objects.",
+  "version": "1.0.0",
+  "publisher": "TAHERElMehdi",
+  "icon": "./assets/logo.ico",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:calToAl.convertSelection"
+  ],
+  "files": [
+    "dist",
+    "bin",
+    "assets",
+    "package.json"
+  ],
+  "homepage": "https://github.com/taher-el-mehdi/cal-to-al",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/taher-el-mehdi/cal-to-al"
+  },
+  "bugs": {
+    "url": "https://github.com/taher-el-mehdi/cal-to-al/issues"
+  },
+  "keywords": [
+    "Business Central",
+    "Nav",
+    "AL",
+    "txt2al",
+    "Microsoft Dynamics",
+    "Business Central Development"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "calToAl.convertSelection",
+        "title": "Convert C/AL to AL",
+        "category": "EMT"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "calToAl.convertSelection",
+          "group": "navigation@1",
+          "when": "resourceExtname == .txt"
+        },
+        {
+          "command": "calToAl.convertSelection",
+          "group": "navigation@1",
+          "when": "explorerResourceIsFolder && resourceScheme == file"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CAL to AL Convertor",
+      "properties": {
+        "calToAl.txt2alPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to Txt2Al.exe. If empty, the extension looks in the workspace bin folder or the extension's bin."
+        },
+        "calToAl.rename": {
+          "type": "boolean",
+          "default": true,
+          "description": "Pass --rename to avoid filename clashes (on by default)."
+        },
+        "calToAl.type": {
+          "type": "string",
+          "default": "",
+          "enum": ["", "table", "page", "codeunit", "report", "xmlport", "query"],
+          "description": "Pass --type to txt2al (empty = not set)."
+        },
+        "calToAl.extensionStartId": {
+          "type": "number",
+          "default": 0,
+          "description": "Pass --extensionStartId (0 = not set)."
+        },
+        "calToAl.injectDotNetAddIns": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --injectDotNetAddIns."
+        },
+        "calToAl.dotNetAddInsPackage": {
+          "type": "string",
+          "default": "",
+          "description": "Pass --dotNetAddInsPackage path (empty = not set)."
+        },
+        "calToAl.dotNetTypePrefix": {
+          "type": "string",
+          "default": "",
+          "description": "Pass --dotNetTypePrefix (empty = not set)."
+        },
+        "calToAl.translationFormat": {
+          "type": "string",
+          "default": "",
+          "enum": ["", "Xliff", "Lcg"],
+          "description": "Pass --translationFormat (empty = not set)."
+        },
+        "calToAl.addLegacyTranslationInfo": {
+          "type": "boolean",
+          "default": false,
+          "description": "Pass --addLegacyTranslationInfo."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "package": "npx vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
