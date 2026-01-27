@@ -8,8 +8,14 @@ Convert **Microsoft Dynamics NAV (C/AL)** objects to **Business Central AL** dir
 - 📂 Automatically generates AL `./src` folder with al objects converted.
 - 📋 Displays conversion logs and errors inside VS Code.
 
-## Demo converting one file.
-![Demo converting File](./assets/file.gif)
 
-## Demo converting folder contains files.
-![Demo converting Folder](./assets/folder.gif)
+## Settings:
+
+- Open **Settings** (`Ctrl + ,`)
+- Search for **CAL to AL Converter**
+---
+| Setting                            | Description                                                           |
+| ---------------------------------- | --------------------------------------------------------------------- |
+| `calToAl.type`                     | Convert only a specific object type (`table`, `page`, `report`, etc.) |
+| `calToAl.extensionStartId`         | Starting object ID for the generated AL extension                     |
+| `calToAl.tableDataOnly`            | Convert only table data.                                              |
