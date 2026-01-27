@@ -66,6 +66,7 @@ async function countAlFiles(dir: string): Promise<number> {
 
 function buildArgs(source: string, target: string): string[] {
   const cfg = vscode.workspace.getConfiguration('calToAl');
+  
   const args: string[] = ['--source', source, '--target', target];
 
   if (cfg.get<boolean>('rename')) args.push('--rename');
@@ -86,6 +87,8 @@ function buildArgs(source: string, target: string): string[] {
 
   const transFmt = (cfg.get<string>('translationFormat') || '').trim();
   if (transFmt) args.push('--translationFormat', transFmt);
+
+  if (cfg.get<boolean>('tableDataOnly')) args.push('--tableDataOnly');
 
   if (cfg.get<boolean>('addLegacyTranslationInfo')) args.push('--addLegacyTranslationInfo');
 
