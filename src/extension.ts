@@ -22,12 +22,13 @@ function resolveTxt2AlPath(
   const cfg = vscode.workspace.getConfiguration('calToAl');
   const configured = (cfg.get<string>('txt2alPath') || '').trim();
 
+  // User configuration always wins, but only if the path exists.
   if (configured) {
     if (fs.existsSync(configured)) return configured;
     vscode.window.showWarningMessage(`Configured txt2al path does not exist: ${configured}`);
   }
 
-  // 1) Workspace bin
+  // 1) Prefer workspace-local bin if available.
   if (workspaceRoot) {
     const wsCandidates = [
       path.join(workspaceRoot, 'bin', 'Txt2Al.exe'),
@@ -109,7 +110,8 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
     return;
   }
 
-  // 🔑 txt2al requires a DIRECTORY
+  // txt2al expects a folder as input, not a single file.
+  // If the user selected a file, we mirror it into a temp directory first.
   let tempSourceDir: string | undefined;
 
   if (stat.isFile()) {
@@ -144,7 +146,8 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
 
     const args = buildArgs(sourcePath, targetPath);
     const child = spawn(exePath, args, {
-      cwd: path.dirname(exePath), // important for .NET DLL resolution
+      // txt2al is a .NET executable; the working directory can affect assembly loading.
+      cwd: path.dirname(exePath),
       windowsHide: true,
       shell: false
     });
