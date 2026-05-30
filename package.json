@@ -30,8 +30,6 @@
     "AL",
     "Business Central",
     "Dynamics 365 Business Central",
-    "Tool",
-    "txt2al",
     "ERP"
   ],
   "contributes": {
