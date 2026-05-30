@@ -2,17 +2,16 @@
   "name": "cal-to-al",
   "displayName": "CAL to AL Converter",
   "description": "Convert NAV C/AL .txt files to AL Business Central objects.",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "publisher": "TAHERElMehdi",
-  "icon": "./assets/logo.ico",
+  "icon": "./assets/logo.png",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
-  "main": "./dist/extension.js",
-  "activationEvents": [
-    "onCommand:calToAl.convertSelection"
+  "categories": [
+    "Other"
   ],
+  "main": "./dist/extension.js",
   "files": [
     "dist",
     "bin",
@@ -28,12 +27,12 @@
     "url": "https://github.com/taher-el-mehdi/cal-to-al/issues"
   },
   "keywords": [
-    "Business Central",
-    "Nav",
     "AL",
+    "Business Central",
+    "Dynamics 365 Business Central",
+    "Tool",
     "txt2al",
-    "Microsoft Dynamics",
-    "Business Central Development"
+    "ERP"
   ],
   "contributes": {
     "commands": [
@@ -58,59 +57,87 @@
       ]
     },
     "configuration": {
-      "title": "CAL to AL Convertor",
+      "title": "CAL to AL Converter",
       "properties": {
-        "calToAl.txt2alPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional absolute path to Txt2Al.exe. If empty, the extension looks in the workspace bin folder or the extension's bin."
-        },
-        "calToAl.rename": {
-          "type": "boolean",
-          "default": true,
-          "description": "Pass --rename to avoid filename clashes (on by default)."
-        },
         "calToAl.type": {
           "type": "string",
           "default": "",
-          "enum": ["", "table", "page", "codeunit", "report", "xmlport", "query"],
-          "description": "Pass --type to txt2al (empty = not set)."
+          "enum": [
+            "",
+            "Codeunit",
+            "Table",
+            "Page",
+            "Report",
+            "Query",
+            "XmlPort"
+          ],
+          "description": "Convert only a specific object type (--type). Leave empty to convert all types."
         },
         "calToAl.extensionStartId": {
           "type": "number",
-          "default": 0,
-          "description": "Pass --extensionStartId (0 = not set)."
+          "default": 70000000,
+          "description": "Starting numeric ID for extension objects, incremented by 1 for each. Default: 70000000."
         },
         "calToAl.injectDotNetAddIns": {
           "type": "boolean",
           "default": false,
-          "description": "Pass --injectDotNetAddIns."
-        },
-        "calToAl.tableDataOnly": {
-          "type": "boolean",
-          "default": false,
-          "description": "Pass --tableDataOnly."
+          "description": "Inject standard .NET add-in definitions into the resulting .NET package (--injectDotNetAddIns)."
         },
         "calToAl.dotNetAddInsPackage": {
           "type": "string",
           "default": "",
-          "description": "Pass --dotNetAddInsPackage path (empty = not set)."
+          "description": "Path to an AL file containing custom .NET type declarations to include in the .NET package (--dotNetAddInsPackage). Leave empty to not set."
         },
         "calToAl.dotNetTypePrefix": {
           "type": "string",
           "default": "",
-          "description": "Pass --dotNetTypePrefix (empty = not set)."
-        },
-        "calToAl.translationFormat": {
-          "type": "string",
-          "default": "",
-          "enum": ["", "Xliff", "Lcg"],
-          "description": "Pass --translationFormat (empty = not set)."
+          "description": "Prefix for all .NET type aliases created during conversion (--dotNetTypePrefix). Leave empty to not set."
         },
         "calToAl.addLegacyTranslationInfo": {
           "type": "boolean",
           "default": false,
-          "description": "Pass --addLegacyTranslationInfo."
+          "description": "Add legacy translation mapping info to translation files to help migrate existing translated resources."
+        },
+        "calToAl.runtime": {
+          "type": "string",
+          "default": "",
+          "description": "Target AL runtime version, e.g. '15.0'. Leave empty to use the latest supported runtime."
+        },
+        "calToAl.objectFileNamePattern": {
+          "type": "string",
+          "default": "{type}-{id}.{name}",
+          "description": "Pattern for naming AL object files. Placeholders: {name}, {type}, {id}. Default: {type}-{id}.{name}."
+        },
+        "calToAl.extensionObjectFileNamePattern": {
+          "type": "string",
+          "default": "{type}-{id}.{name}",
+          "description": "Pattern for naming AL extension object files. Placeholders: {name}, {type}, {id}, {targetName}, {targetId}. Default: {type}-{id}.{name}."
+        },
+        "calToAl.dataClassificationDefaulting": {
+          "type": "string",
+          "default": "",
+          "enum": [
+            "",
+            "",
+            "ToBeClassified",
+            "CustomerContent",
+            "EndUserIdentifiableInformation",
+            "AccountData",
+            "EndUserPseudonymousIdentifiers",
+            "OrganizationIdentifiableInformation",
+            "SystemMetadata"
+          ],
+          "description": "Default DataClassification property value applied to all table fields that don't have it set. Leave empty to not set."
+        },
+        "calToAl.tableDataOnly": {
+          "type": "boolean",
+          "default": false,
+          "description": "For table objects, convert only table and field definitions. Methods and trigger code are excluded."
+        },
+        "calToAl.verboseLogging": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable verbose logging. Captures full conversion details to the log file."
         }
       }
     }
