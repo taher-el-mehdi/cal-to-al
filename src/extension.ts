@@ -133,6 +133,7 @@ async function writeConversionLog(
   }
 
   lines.push(timestamp(`Process exited with code: ${exitCode}`));
+  lines.push(timestamp('=== Conversion ended ==='));
   lines.push('');
 
   try {
@@ -398,14 +399,14 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
   const objectMapping = await loadObjectMapping(context, workspaceRoot);
 
   // Debug: log objectMapping to output channel
-  outputChannel.appendLine(`[DEBUG] objectMapping size: ${objectMapping.size}`);
-  if (objectMapping.size > 0) {
-    outputChannel.appendLine('[DEBUG] objectMapping contents:');
-    for (const [key, value] of objectMapping.entries()) {
-      outputChannel.appendLine(`  "${key}" → "${value}"`);
-    }
-    outputChannel.show(true); // bring output channel to front
-  }
+  // outputChannel.appendLine(`[DEBUG] objectMapping size: ${objectMapping.size}`);
+  // if (objectMapping.size > 0) {
+    // outputChannel.appendLine('[DEBUG] objectMapping contents:');
+    // for (const [key, value] of objectMapping.entries()) {
+    //   outputChannel.appendLine(`  "${key}" → "${value}"`);
+    // }
+    // outputChannel.show(true); // bring output channel to front
+  // }
 
   try {
     await vscode.window.withProgress({
