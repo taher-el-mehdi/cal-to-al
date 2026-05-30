@@ -12,6 +12,7 @@ export const DIRECTORY_NAMES = {
   WORKSPACE_BIN: 'bin',
   AL_OUTPUT: 'src-cal-to-al',
   TEMP_CONVERSION: '.caltoal-temp',
+  OBJECT_MAPPING_FILE: 'object-mapping.json',
 };
 
 export const CONVERSION_SETTINGS = {
@@ -34,4 +35,5 @@ export const CONVERSION_SETTINGS = {
   txt2alPath: 'txt2alPath',
   logFilePath: 'logFilePath',
   verboseLogging: 'verboseLogging',
+  objectMappingPath: 'objectMappingPath',
 };
