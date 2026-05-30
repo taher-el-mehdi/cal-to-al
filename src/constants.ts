@@ -15,6 +15,10 @@ export const DIRECTORY_NAMES = {
   OBJECT_MAPPING_FILE: 'object-mapping.json',
 };
 
+export const FILE_NAMES = {
+  CONVERSION_LOG: '_conversion.log',
+};
+
 export const CONVERSION_SETTINGS = {
   rename: 'rename',
   type: 'type',

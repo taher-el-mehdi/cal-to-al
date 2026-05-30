@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as readline from 'readline';
 import { spawn, ChildProcess } from 'child_process';
 import {
   CONFIG_NAMESPACE,
   EXECUTABLE_NAMES,
   DIRECTORY_NAMES,
+  FILE_NAMES,
   CONVERSION_SETTINGS,
 } from './constants';
 
@@ -67,23 +69,8 @@ function resolveTxt2AlPath(
 }
 
 /**
- * Count AL files directly inside a directory (non-recursive).
- * Uses withFileTypes to avoid a stat() call per entry.
- */
-async function countAlFiles(dir: string): Promise<number> {
-  try {
-    const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-    return entries.filter(
-      e => e.isFile() && e.name.toLowerCase().endsWith('.al')
-    ).length;
-  } catch {
-    return 0;
-  }
-}
-
-/**
  * Write a conversion log file after each run.
- * Path priority: user-configured > default (<AL output folder>/conversion.log).
+ * Path priority: user-configured > default (<AL output folder>/_conversion.log).
  * Appends to the file so repeated runs accumulate in one place.
  */
 async function writeConversionLog(
@@ -94,7 +81,7 @@ async function writeConversionLog(
 ): Promise<void> {
   const cfg = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
   const configured = (cfg.get<string>(CONVERSION_SETTINGS.logFilePath) || '').trim();
-  const logPath = configured || path.join(targetPath, 'conversion.log');
+  const logPath = configured || path.join(targetPath, FILE_NAMES.CONVERSION_LOG);
 
   const timestamp = (label: string) => `[${new Date().toISOString()}] ${label}`;
   const lines: string[] = [];
@@ -124,21 +111,6 @@ async function writeConversionLog(
 // Object Reference Resolver
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Load the object-name mapping from the JSON file configured.
- *
- * Expected JSON format
- * {
- *   "Record \"3\"":   "Record \"Payment Terms\"",
- *   "Record \"4\"":   "Record \"Currency\"",
- *   "Query \"7300\"": "Query \"Lot Numbers by Bin\""
- * }
- *
- * Path priority: calToAl.objectMappingPath setting > <workspaceRoot>/object-mapping.json
- *
- * Returns an empty map (not an error) when the file does not exist so the
- * resolver step is silently skipped on workspaces that don't need it.
- */
 async function loadObjectMapping(workspaceRoot: string): Promise<Map<string, string>> {
   const cfg = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
   const configured = (cfg.get<string>(CONVERSION_SETTINGS.objectMappingPath) || '').trim();
@@ -174,17 +146,6 @@ async function loadObjectMapping(workspaceRoot: string): Promise<Map<string, str
   }
 }
 
-/**
- * Apply the object-name mapping to all .al files in the target directory.
- *
- * For each file:
- *  - Read the content
- *  - Replace every mapped numeric reference with its readable name
- *  - Write back in place only if at least one replacement was made
- *  - Log each replacement to the output channel and conversion.log
- *
- * Returns a summary string logged at the end of the step.
- */
 async function resolveObjectReferences(
   targetPath: string,
   mapping: Map<string, string>,
@@ -192,9 +153,6 @@ async function resolveObjectReferences(
 ): Promise<void> {
   if (mapping.size === 0) return;
 
-  // Build a single regex that matches any of the mapped keys (keys are
-  // treated as plain strings, not regex patterns, to match the PowerShell
-  // behaviour of Regex.Escape).
   const escapedKeys = Array.from(mapping.keys()).map(k =>
     k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   );
@@ -209,7 +167,6 @@ async function resolveObjectReferences(
   }
 
   const alFiles = entries.filter(e => e.isFile() && e.name.toLowerCase().endsWith('.al'));
-
   if (alFiles.length === 0) return;
 
   const timestamp = (label: string) => `[${new Date().toISOString()}] ${label}`;
@@ -236,7 +193,7 @@ async function resolveObjectReferences(
 
     const updated = content.replace(pattern, (match) => {
       const replacement = mapping.get(match);
-      if (replacement === undefined) return match; // safety — should never happen
+      if (replacement === undefined) return match;
       fileReplacements++;
       fileLog.push(timestamp(`  ${entry.name}: "${match}" → "${replacement}"`));
       return replacement;
@@ -268,11 +225,10 @@ async function resolveObjectReferences(
   logLines.push(timestamp(summary));
   logLines.push('');
 
-  // Append resolver results to the same conversion.log
   try {
     await fs.promises.appendFile(logPath, logLines.join('\n'), 'utf8');
   } catch {
-    // Non-fatal — resolver already ran successfully, just couldn't log it
+    // Non-fatal
   }
 }
 
@@ -285,17 +241,11 @@ function buildArgs(source: string, target: string): string[] {
   const cfg = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
   const args: string[] = ['--source', source, '--target', target];
 
-  // verboseLogging implicitly forces --stacktrace
   const verbose = cfg.get<boolean>(CONVERSION_SETTINGS.verboseLogging);
   if (verbose) args.push('--stacktrace');
 
-  // Always enabled — multithreading significantly improves performance
   args.push('--multithreaded');
-
-  // Always enabled — ensures consistent output and avoids naming conflicts
   args.push('--rename');
-
-  // Always enabled — ensures consistent AL code style
   args.push('--format');
 
   if (cfg.get<boolean>(CONVERSION_SETTINGS.injectDotNetAddIns)) args.push('--injectDotNetAddIns');
@@ -346,7 +296,6 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
     return;
   }
 
-  // txt2al requires a directory as input, not a single file.
   let tempSourceDir: string | undefined;
   if (stat.isFile()) {
     tempSourceDir = path.join(workspaceRoot, DIRECTORY_NAMES.TEMP_CONVERSION);
@@ -367,24 +316,20 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
     return;
   }
 
-  // Resolve the log path once so both writeConversionLog and
-  // resolveObjectReferences append to the same file.
   const cfg = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
   const configuredLog = (cfg.get<string>(CONVERSION_SETTINGS.logFilePath) || '').trim();
-  const logPath = configuredLog || path.join(targetPath, 'conversion.log');
+  const logPath = configuredLog || path.join(targetPath, FILE_NAMES.CONVERSION_LOG);
 
-  // Load the object mapping before starting — if the file is missing or
-  // empty the resolver step is silently skipped after conversion.
   const objectMapping = await loadObjectMapping(workspaceRoot);
-
-  const beforeCount = await countAlFiles(targetPath);
 
   try {
     await vscode.window.withProgress({
       location: vscode.ProgressLocation.Notification,
-      title: 'Converting C/AL to AL...',
+      title: 'C/AL → AL',
       cancellable: true,
-    }, async () => {
+    }, async (progress) => {
+      progress.report({ message: 'Starting conversion…' });
+
       const args = buildArgs(sourcePath, targetPath);
       const child = spawn(exePath, args, {
         cwd: path.dirname(exePath),
@@ -396,30 +341,59 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
 
       let stdoutBuf = '';
       let stderrBuf = '';
+      let convertedCount = 0;
 
-      child.stdout.on('data', (d: Buffer) => { stdoutBuf += d.toString(); });
+      const rl = readline.createInterface({ input: child.stdout, terminal: false });
+
+      rl.on('line', (line: string) => {
+        stdoutBuf += `${line}\n`;
+
+        if (line.startsWith('Writing:') || line.startsWith('Overwriting:')) {
+          convertedCount++;
+          const writtenFile = path.basename(line.slice('Writing:'.length).trim());
+
+          // Show "X — filename" when total is known, otherwise just filename
+          const countLabel =  `${convertedCount}`;
+
+          progress.report({
+            message: `${countLabel} — ${writtenFile}`,
+            // increment drives the VS Code progress bar fill
+            // increment: totalObjects > 0 ? (100 / totalObjects) : undefined,
+          });
+        }
+      });
+
       child.stderr.on('data', (d: Buffer) => { stderrBuf += d.toString(); });
 
       const exitCode: number = await new Promise(resolve => {
-        child.on('close', resolve);
-        child.on('error', () => resolve(-1));
+        child.on('close', code => {
+          // Destroy readline immediately on process close so the interface
+          // does not hold the event loop open waiting to flush buffered lines.
+          // This eliminates the stall between the last "Writing:" line and
+          // the completion notification appearing.
+            progress.report({
+            message: `Ending Conversion…`,
+          });
+          child.stdout.destroy();
+          resolve(code ?? -1);
+
+        });
+        child.on('error', () => {
+          child.stdout.destroy();
+          resolve(-1);
+        });
       });
 
       activeChild = undefined;
 
-      // Always clean up the temp directory
       if (tempSourceDir) {
         await fs.promises.rm(tempSourceDir, { recursive: true, force: true }).catch(() => {});
       }
 
-      // Write conversion log when verbose logging is enabled
       const verbose = cfg.get<boolean>(CONVERSION_SETTINGS.verboseLogging);
       if (verbose) {
         await writeConversionLog(targetPath, stdoutBuf, stderrBuf, exitCode);
       }
-
-      const afterCount = await countAlFiles(targetPath);
-      const delta = Math.max(0, afterCount - beforeCount);
 
       if (exitCode !== 0) {
         const errMsg = stderrBuf.trim() || 'Conversion failed with no output.';
@@ -427,9 +401,10 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
         outputChannel.appendLine(errMsg);
         outputChannel.show(true);
 
-        if (delta === 0) {
+        // Use convertedCount (tracked in memory) instead of re-scanning disk
+        if (convertedCount === 0) {
           vscode.window.showErrorMessage(
-            `Conversion failed and 0 objects were converted. See conversion.log inside '${DIRECTORY_NAMES.AL_OUTPUT}' for details.`
+            `Conversion failed — 0 objects converted. See "${FILE_NAMES.CONVERSION_LOG}" inside '${DIRECTORY_NAMES.AL_OUTPUT}' for details.`
           );
         } else {
           vscode.window.showErrorMessage(
@@ -444,32 +419,23 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
         outputChannel.appendLine(stdoutBuf.trim());
       }
 
-      // ── Post-processing: resolve numeric object references ──────────────
-      // Runs automatically after a successful conversion. Silently skipped
-      // when no mapping file is found in the workspace.
       if (objectMapping.size > 0) {
         await resolveObjectReferences(targetPath, objectMapping, logPath);
       }
-      // ────────────────────────────────────────────────────────────────────
 
+      // Use convertedCount tracked during streaming — avoids a slow
+      // readdir over the entire output folder at the end.
       vscode.window.showInformationMessage(
-        `Conversion complete: ${delta} new object(s) converted to AL in ${DIRECTORY_NAMES.AL_OUTPUT}.`
+        `C/AL → AL: ${convertedCount} object(s) converted. ` +
+        `Output: "${DIRECTORY_NAMES.AL_OUTPUT}" — Log: "${FILE_NAMES.CONVERSION_LOG}".`
       );
     });
   } catch (err) {
     outputChannel.appendLine(`[EXCEPTION] Conversion threw: ${String(err)}`);
     outputChannel.show(true);
-
-    const afterCount = await countAlFiles(targetPath).catch(() => 0);
-    const delta = Math.max(0, afterCount - beforeCount);
-
-    if (delta === 0) {
-      vscode.window.showErrorMessage(
-        `Conversion crashed and 0 objects were converted. See conversion.log inside '${DIRECTORY_NAMES.AL_OUTPUT}' for details.`
-      );
-    } else {
-      vscode.window.showErrorMessage(`Conversion crashed: ${String(err)}`);
-    }
+    vscode.window.showErrorMessage(
+      `Conversion crashed. See "${FILE_NAMES.CONVERSION_LOG}" inside '${DIRECTORY_NAMES.AL_OUTPUT}' for details.`
+    );
   }
 }
 

@@ -8,8 +8,9 @@ All notable changes to this project will be documented in this file.
 
 ### ✨ Added
 - Centralises all shared configuration keys, directory names, and executable names to avoid magic strings across the codebase.
-- enables detailed logging `conversion.log` for capturing full conversion details to the log file.
+- enables detailed logging `_conversion.log` for capturing full conversion details to the log file.
 - Improved output file naming convention: {type}-{id}.{name}.al and a dedicated src-cal-to-al output folder for cleaner workspace organisation.
+ - Real-time conversion progress: VS Code notification now updates per-file as `txt2al` writes output, and logging was improved (stdout parsed line-by-line; conversion log path is configurable and only written when `calToAl.verboseLogging` is enabled).
 
 ---
 

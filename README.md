@@ -6,7 +6,7 @@
 
 # C/AL to AL Converter for Visual Studio Code
 
-The [C/AL to AL Converter](https://marketplace.visualstudio.com/items?itemName=TAHERElMehdi.cal-to-al) is designed to convert **Microsoft Dynamics NAV (C/AL)** objects to **Business Central AL**.
+The [C/AL to AL Converter](https://marketplace.visualstudio.com/items?itemName=TAHERElMehdi.cal-to-al) is a migration tool for converting Microsoft Dynamics NAV (C/AL) `.txt` files to Business Central `.al` objects directly from VS Code.
 
 ## Command:
 - `Convert C/AL to AL` — available in the VS Code Explorer context menu for `.txt` files and folders.
