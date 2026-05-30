@@ -9,7 +9,7 @@ Available on [VS Code Marketplace](https://marketplace.visualstudio.com/items?it
 
 ## Command
 
-- `Convert C/AL to AL` — available in the VS Code Explorer context menu for `.txt` files and folders. Also available via the Command Palette. Open it with `Ctrl+Shift+P`.
+- `Convert C/AL to AL` — available in the VS Code Explorer context menu for `.txt` files and folders.
 
 ## Settings
 

@@ -344,7 +344,7 @@ export function activate(context: vscode.ExtensionContext): void {
     'calToAl.convertSelection',
     async (resource?: vscode.Uri) => {
       if (!resource) {
-        vscode.window.showErrorMessage('No file or folder selected.');
+        vscode.window.showErrorMessage('No file or folder selected, Please Right-click over a file/folder in Explorer. and click "Convert C/AL to AL".');
         return;
       }
       await runConversion(context, resource);
