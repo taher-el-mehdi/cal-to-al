@@ -231,10 +231,14 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
   // Note: files overwritten in place are not reflected in the delta.
   const beforeCount = await countAlFiles(targetPath);
 
-  await vscode.window.withProgress({
+  // Wrap the conversion run in a try/catch so any unexpected exception is
+  // surfaced to the user and we can provide a helpful hint to inspect the
+  // conversion.log inside the AL output folder when no objects were produced.
+  try {
+    await vscode.window.withProgress({
     location: vscode.ProgressLocation.Notification,
     title: 'Converting C/AL to AL...',
-    cancellable: false,
+    cancellable: true,
   }, async () => {
     const args = buildArgs(sourcePath, targetPath);
     const child = spawn(exePath, args, {
@@ -266,7 +270,17 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
       });
     }
 
-    await writeConversionLog(targetPath, stdoutBuf, stderrBuf, exitCode);
+    // Only write conversion log if verbose logging is enabled
+    const cfg = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
+    const verbose = cfg.get<boolean>(CONVERSION_SETTINGS.verboseLogging);
+    if (verbose) {
+      await writeConversionLog(targetPath, stdoutBuf, stderrBuf, exitCode);
+    }
+
+    // Count output files after conversion regardless of exit code so we can
+    // provide a helpful hint when nothing was produced.
+    const afterCount = await countAlFiles(targetPath);
+    const delta = Math.max(0, afterCount - beforeCount);
 
     if (exitCode !== 0) {
       const errMsg = stderrBuf.trim() || 'Conversion failed with no output.';
@@ -276,9 +290,17 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
       outputChannel.appendLine(errMsg);
       outputChannel.show(true);
 
-      vscode.window.showErrorMessage(
-        errMsg.length > 800 ? errMsg.slice(0, 800) + '…' : errMsg
-      );
+      // If nothing was produced, point users to the conversion.log inside
+      // the AL output folder for more details.
+      if (delta === 0) {
+        vscode.window.showErrorMessage(
+          `Conversion failed and 0 objects were converted. See conversion.log inside '${DIRECTORY_NAMES.AL_OUTPUT}' folder to see why.`
+        );
+      } else {
+        vscode.window.showErrorMessage(
+          errMsg.length > 800 ? errMsg.slice(0, 800) + '…' : errMsg
+        );
+      }
       return;
     }
 
@@ -288,13 +310,28 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
       outputChannel.appendLine(stdoutBuf.trim());
     }
 
-    const afterCount = await countAlFiles(targetPath);
-    const delta = Math.max(0, afterCount - beforeCount);
-
     vscode.window.showInformationMessage(
       `Conversion complete: ${delta} new object(s) converted to AL in ${DIRECTORY_NAMES.AL_OUTPUT}.`
     );
   });
+  } catch (err) {
+    // Unexpected exception while running the conversion. Surface it to the
+    // output channel and show a message guiding users to the conversion.log
+    // inside the AL output folder if nothing was produced.
+    outputChannel.appendLine(`[EXCEPTION] Conversion threw: ${String(err)}`);
+    outputChannel.show(true);
+
+    const afterCount = await countAlFiles(targetPath).catch(() => 0);
+    const delta = Math.max(0, afterCount - beforeCount);
+
+    if (delta === 0) {
+      vscode.window.showErrorMessage(
+        `Conversion crashed and 0 objects were converted. See conversion.log inside '${DIRECTORY_NAMES.AL_OUTPUT}' folder to see why.`
+      );
+    } else {
+      vscode.window.showErrorMessage(`Conversion crashed: ${String(err)}`);
+    }
+  }
 }
 
 /**
