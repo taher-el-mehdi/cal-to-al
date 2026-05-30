@@ -69,6 +69,42 @@ function resolveTxt2AlPath(
 }
 
 /**
+ * Resolve the path to object-mapping.json.
+ * Priority: configured path > workspace bin > parent directory bin > extension bin > workspace root.
+ */
+function resolveObjectMappingPath(
+  context: vscode.ExtensionContext,
+  workspaceRoot: string
+): string | undefined {
+  const cfg = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
+  const configured = (cfg.get<string>(CONVERSION_SETTINGS.objectMappingPath) || '').trim();
+
+  if (configured) {
+    if (fs.existsSync(configured)) return configured;
+    vscode.window.showWarningMessage(
+      `Configured object-mapping path not found: "${configured}". Falling back to default locations.`
+    );
+  }
+
+  const wsPrimary = path.join(workspaceRoot, DIRECTORY_NAMES.WORKSPACE_BIN, DIRECTORY_NAMES.OBJECT_MAPPING_FILE);
+  if (fs.existsSync(wsPrimary)) return wsPrimary;
+
+  const parent = path.dirname(workspaceRoot);
+  if (parent && parent !== workspaceRoot) {
+    const wsParent = path.join(parent, DIRECTORY_NAMES.WORKSPACE_BIN, DIRECTORY_NAMES.OBJECT_MAPPING_FILE);
+    if (fs.existsSync(wsParent)) return wsParent;
+  }
+
+  const extPath = path.join(context.extensionPath, DIRECTORY_NAMES.WORKSPACE_BIN, DIRECTORY_NAMES.OBJECT_MAPPING_FILE);
+  if (fs.existsSync(extPath)) return extPath;
+
+  const rootPath = path.join(workspaceRoot, DIRECTORY_NAMES.OBJECT_MAPPING_FILE);
+  if (fs.existsSync(rootPath)) return rootPath;
+
+  return undefined;
+}
+
+/**
  * Write a conversion log file after each run.
  * Path priority: user-configured > default (<AL output folder>/_conversion.log).
  * Appends to the file so repeated runs accumulate in one place.
@@ -111,14 +147,17 @@ async function writeConversionLog(
 // Object Reference Resolver
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function loadObjectMapping(workspaceRoot: string): Promise<Map<string, string>> {
-  const cfg = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
-  const configured = (cfg.get<string>(CONVERSION_SETTINGS.objectMappingPath) || '').trim();
-  const mappingPath = configured || path.join(workspaceRoot, DIRECTORY_NAMES.OBJECT_MAPPING_FILE);
-
-  if (!fs.existsSync(mappingPath)) {
+async function loadObjectMapping(
+  context: vscode.ExtensionContext,
+  workspaceRoot: string
+): Promise<Map<string, string>> {
+  const mappingPath = resolveObjectMappingPath(context, workspaceRoot);
+  if (!mappingPath) {
+    outputChannel.appendLine('[DEBUG] object-mapping.json not found in configured or default locations.');
     return new Map();
   }
+
+  outputChannel.appendLine(`[DEBUG] object-mapping.json resolved to: ${mappingPath}`);
 
   try {
     const raw = await fs.promises.readFile(mappingPath, 'utf8');
@@ -145,7 +184,6 @@ async function loadObjectMapping(workspaceRoot: string): Promise<Map<string, str
     return new Map();
   }
 }
-
 async function resolveObjectReferences(
   targetPath: string,
   mapping: Map<string, string>,
@@ -156,7 +194,14 @@ async function resolveObjectReferences(
   const escapedKeys = Array.from(mapping.keys()).map(k =>
     k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   );
-  const pattern = new RegExp(escapedKeys.join('|'), 'g');
+
+  // Case-insensitive flag added — handles any casing variation from txt2al
+  const pattern = new RegExp(escapedKeys.join('|'), 'gi');
+
+  // Diagnostic pattern: finds any remaining numeric object references
+  // that look like Record/Page/Query/etc. "NNN" after the mapping runs.
+  // These are logged so you can add them to object-mapping.json.
+  const unmappedPattern = /\b(Record|Page|Query|Codeunit|Report|XmlPort|Enum|Table)\s+"(\d+)"/gi;
 
   let entries: fs.Dirent[];
   try {
@@ -174,6 +219,7 @@ async function resolveObjectReferences(
 
   let totalFiles = 0;
   let totalReplacements = 0;
+  const unmappedRefs = new Set<string>(); // collect unique unmapped refs across all files
 
   for (const entry of alFiles) {
     const filePath = path.join(targetPath, entry.name);
@@ -191,13 +237,27 @@ async function resolveObjectReferences(
     let fileReplacements = 0;
     const fileLog: string[] = [];
 
+    // Use case-insensitive match but preserve the replacement value exactly
+    // as written in the mapping (so casing in the output is always correct).
     const updated = content.replace(pattern, (match) => {
-      const replacement = mapping.get(match);
-      if (replacement === undefined) return match;
+      // Map lookup must also be case-insensitive — find the key that matches
+      const key = Array.from(mapping.keys()).find(
+        k => k.toLowerCase() === match.toLowerCase()
+      );
+      if (key === undefined) return match;
+      const replacement = mapping.get(key)!;
       fileReplacements++;
       fileLog.push(timestamp(`  ${entry.name}: "${match}" → "${replacement}"`));
       return replacement;
     });
+
+    // After replacement, scan for any still-numeric references and collect
+    // them so we can report what's missing from the mapping file.
+    let unmatchedResult: RegExpExecArray | null;
+    unmappedPattern.lastIndex = 0;
+    while ((unmatchedResult = unmappedPattern.exec(updated)) !== null) {
+      unmappedRefs.add(unmatchedResult[0]);
+    }
 
     if (fileReplacements === 0) continue;
 
@@ -223,6 +283,22 @@ async function resolveObjectReferences(
   const summary = `[RESOLVER] Done — ${totalReplacements} replacement(s) across ${totalFiles} file(s).`;
   outputChannel.appendLine(summary);
   logLines.push(timestamp(summary));
+
+  // Report any numeric references that had no mapping entry — these are
+  // the exact strings you need to add to object-mapping.json.
+  if (unmappedRefs.size > 0) {
+    const unmappedHeader = `[RESOLVER] ${unmappedRefs.size} unmapped numeric reference(s) found — add these to object-mapping.json:`;
+    outputChannel.appendLine(unmappedHeader);
+    logLines.push(timestamp(unmappedHeader));
+    outputChannel.show(true); // bring output channel to front so user sees the list
+
+    for (const ref of [...unmappedRefs].sort()) {
+      const line = `  ${ref}`;
+      outputChannel.appendLine(line);
+      logLines.push(timestamp(line));
+    }
+  }
+
   logLines.push('');
 
   try {
@@ -231,7 +307,6 @@ async function resolveObjectReferences(
     // Non-fatal
   }
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -320,7 +395,17 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
   const configuredLog = (cfg.get<string>(CONVERSION_SETTINGS.logFilePath) || '').trim();
   const logPath = configuredLog || path.join(targetPath, FILE_NAMES.CONVERSION_LOG);
 
-  const objectMapping = await loadObjectMapping(workspaceRoot);
+  const objectMapping = await loadObjectMapping(context, workspaceRoot);
+
+  // Debug: log objectMapping to output channel
+  outputChannel.appendLine(`[DEBUG] objectMapping size: ${objectMapping.size}`);
+  if (objectMapping.size > 0) {
+    outputChannel.appendLine('[DEBUG] objectMapping contents:');
+    for (const [key, value] of objectMapping.entries()) {
+      outputChannel.appendLine(`  "${key}" → "${value}"`);
+    }
+    outputChannel.show(true); // bring output channel to front
+  }
 
   try {
     await vscode.window.withProgress({

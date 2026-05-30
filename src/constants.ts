@@ -38,6 +38,6 @@ export const CONVERSION_SETTINGS = {
   tableDataOnly: 'tableDataOnly',
   txt2alPath: 'txt2alPath',
   logFilePath: 'logFilePath',
-  verboseLogging: 'verboseLogging',
   objectMappingPath: 'objectMappingPath',
+  verboseLogging: 'verboseLogging',
 };

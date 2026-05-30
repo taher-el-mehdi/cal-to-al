@@ -136,6 +136,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable verbose logging. Captures full conversion details to the log file."
+        },
+        "calToAl.objectMappingPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the object-mapping.json file for resolving numeric object references. Leave empty to use object-mapping.json in the workspace root."
         }
       }
     }
