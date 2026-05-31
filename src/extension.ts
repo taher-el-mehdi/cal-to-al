@@ -40,7 +40,7 @@ const DEVELOPMENT_MODE = false;
 
 function debugLog(message: string): void {
   if (!DEVELOPMENT_MODE) return;
-  outputChannel.appendLine(`[DEBUG] ${message}`);
+  debugLog(`[DEBUG] ${message}`);
   console.log(`[calToAl DEBUG] ${message}`);
 }
 
@@ -147,9 +147,9 @@ async function writeConversionLog(
 
   try {
     await fs.promises.appendFile(logPath, lines.join('\n'), 'utf8');
-    outputChannel.appendLine(`[INFO] Log written to: ${logPath}`);
+    debugLog(`[INFO] Log written to: ${logPath}`);
   } catch (err) {
-    outputChannel.appendLine(`[WARN] Could not write log file: ${err}`);
+    debugLog(`[WARN] Could not write log file: ${err}`);
   }
 }
 
@@ -174,7 +174,7 @@ async function loadObjectMapping(
     const parsed: unknown = JSON.parse(raw);
 
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      outputChannel.appendLine(`[WARN] object-mapping.json must be a flat key/value object. Resolver skipped.`);
+      debugLog(`[WARN] object-mapping.json must be a flat key/value object. Resolver skipped.`);
       return new Map();
     }
 
@@ -183,14 +183,14 @@ async function loadObjectMapping(
       if (typeof value === 'string') {
         map.set(key, value);
       } else {
-        outputChannel.appendLine(`[WARN] Skipping non-string mapping value for key: "${key}"`);
+        debugLog(`[WARN] Skipping non-string mapping value for key: "${key}"`);
       }
     }
 
-    outputChannel.appendLine(`[INFO] Loaded ${map.size} object name mapping(s) from: ${mappingPath}`);
+    debugLog(`[INFO] Loaded ${map.size} object name mapping(s) from: ${mappingPath}`);
     return map;
   } catch (err) {
-    outputChannel.appendLine(`[WARN] Could not parse object-mapping.json: ${err}. Resolver skipped.`);
+    debugLog(`[WARN] Could not parse object-mapping.json: ${err}. Resolver skipped.`);
     return new Map();
   }
 }
@@ -217,7 +217,7 @@ async function resolveObjectReferences(
   try {
     entries = await fs.promises.readdir(targetPath, { withFileTypes: true });
   } catch {
-    outputChannel.appendLine(`[WARN] Could not read output directory for resolver: ${targetPath}`);
+    debugLog(`[WARN] Could not read output directory for resolver: ${targetPath}`);
     return;
   }
 
@@ -239,7 +239,7 @@ async function resolveObjectReferences(
       content = await fs.promises.readFile(filePath, 'utf8');
     } catch (err) {
       const msg = `[WARN] Could not read ${entry.name}: ${err}`;
-      outputChannel.appendLine(msg);
+      debugLog(msg);
       logLines.push(timestamp(msg));
       continue;
     }
@@ -277,34 +277,34 @@ async function resolveObjectReferences(
       totalReplacements += fileReplacements;
 
       const summary = `[RESOLVER] ${entry.name}: ${fileReplacements} replacement(s)`;
-      outputChannel.appendLine(summary);
+      debugLog(summary);
       logLines.push(timestamp(summary));
       fileLog.forEach(l => {
-        outputChannel.appendLine(l);
+        debugLog(l);
         logLines.push(l);
       });
     } catch (err) {
       const msg = `[WARN] Could not write ${entry.name}: ${err}`;
-      outputChannel.appendLine(msg);
+      debugLog(msg);
       logLines.push(timestamp(msg));
     }
   }
 
   const summary = `[RESOLVER] Done — ${totalReplacements} replacement(s) across ${totalFiles} file(s).`;
-  outputChannel.appendLine(summary);
+  debugLog(summary);
   logLines.push(timestamp(summary));
 
   // Report any numeric references that had no mapping entry — these are
   // the exact strings you need to add to object-mapping.json.
   if (unmappedRefs.size > 0) {
-    const unmappedHeader = `[RESOLVER] ${unmappedRefs.size} unmapped numeric reference(s) found — add these to object-mapping.json:`;
-    outputChannel.appendLine(unmappedHeader);
+    const unmappedHeader = `[RESOLVER] ${unmappedRefs.size} unmapped numeric reference(s) found:`;
+    debugLog(unmappedHeader);
     logLines.push(timestamp(unmappedHeader));
     outputChannel.show(true); // bring output channel to front so user sees the list
 
     for (const ref of [...unmappedRefs].sort()) {
       const line = `  ${ref}`;
-      outputChannel.appendLine(line);
+      debugLog(line);
       logLines.push(timestamp(line));
     }
   }
@@ -491,8 +491,8 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
 
       if (exitCode !== 0) {
         const errMsg = stderrBuf.trim() || 'Conversion failed with no output.';
-        outputChannel.appendLine(`[ERROR] txt2al exited with code ${exitCode}`);
-        outputChannel.appendLine(errMsg);
+        debugLog(`[ERROR] txt2al exited with code ${exitCode}`);
+        debugLog(errMsg);
         outputChannel.show(true);
 
         // Use convertedCount (tracked in memory) instead of re-scanning disk
@@ -509,8 +509,8 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
       }
 
       if (stdoutBuf.trim()) {
-        outputChannel.appendLine('[INFO] txt2al output:');
-        outputChannel.appendLine(stdoutBuf.trim());
+        debugLog('[INFO] txt2al output:');
+        debugLog(stdoutBuf.trim());
       }
 
       if (objectMapping.size > 0) {
@@ -525,7 +525,7 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
       );
     });
   } catch (err) {
-    outputChannel.appendLine(`[EXCEPTION] Conversion threw: ${String(err)}`);
+    debugLog(`[EXCEPTION] Conversion threw: ${String(err)}`);
     outputChannel.show(true);
     vscode.window.showErrorMessage(
       `Conversion crashed. See "${FILE_NAMES.CONVERSION_LOG}" inside '${DIRECTORY_NAMES.AL_OUTPUT}' for details.`
