@@ -40,7 +40,6 @@ const DEVELOPMENT_MODE = false;
 
 function debugLog(message: string): void {
   if (!DEVELOPMENT_MODE) return;
-  debugLog(`[DEBUG] ${message}`);
   console.log(`[calToAl DEBUG] ${message}`);
 }
 
@@ -447,7 +446,7 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
           const writtenFile = path.basename(line.slice('Writing:'.length).trim());
 
           // Show "X — filename" when total is known, otherwise just filename
-          const countLabel =  `${convertedCount}`;
+          const countLabel = `${convertedCount}`;
 
           progress.report({
             message: `${countLabel} — ${writtenFile}`,
@@ -460,34 +459,44 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
       child.stderr.on('data', (d: Buffer) => { stderrBuf += d.toString(); });
 
       const exitCode: number = await new Promise(resolve => {
-        child.on('close', code => {
-          // Destroy readline immediately on process close so the interface
-          // does not hold the event loop open waiting to flush buffered lines.
-          // This eliminates the stall between the last "Writing:" line and
-          // the completion notification appearing.
-            progress.report({
-            message: `Ending Conversion…`,
-          });
-          child.stdout.destroy();
-          resolve(code ?? -1);
+        let exitCode: number | undefined;
+        let rlClosed = false;
+        let processClosed = false;
 
+        function tryResolve() {
+          if (rlClosed && processClosed) {
+            resolve(exitCode ?? -1);
+          }
+        }
+
+        rl.on('close', () => {
+          rlClosed = true;
+          tryResolve();
         });
+
+        child.on('close', code => {
+          progress.report({ message: `Ending Conversion…` });
+          exitCode = code ?? -1;
+          processClosed = true;
+          // Don't destroy stdout — let readline drain naturally, it will close on its own
+          tryResolve();
+        });
+
         child.on('error', () => {
-          child.stdout.destroy();
-          resolve(-1);
+          exitCode = -1;
+          processClosed = true;
+          rlClosed = true; // force resolve on error
+          tryResolve();
         });
       });
 
       activeChild = undefined;
 
       if (tempSourceDir) {
-        await fs.promises.rm(tempSourceDir, { recursive: true, force: true }).catch(() => {});
+        await fs.promises.rm(tempSourceDir, { recursive: true, force: true }).catch(() => { });
       }
 
-      const verbose = cfg.get<boolean>(CONVERSION_SETTINGS.verboseLogging);
-      if (verbose) {
-        await writeConversionLog(targetPath, stdoutBuf, stderrBuf, exitCode);
-      }
+      await writeConversionLog(targetPath, stdoutBuf, stderrBuf, exitCode);
 
       if (exitCode !== 0) {
         const errMsg = stderrBuf.trim() || 'Conversion failed with no output.';

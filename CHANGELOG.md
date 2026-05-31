@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [2.0.0] - 2026-05-20
+## [2.0.0] - 2026-06-01
 
 ### ✨ Added
 - Add all paramters of txt2al in Settings of the extension.

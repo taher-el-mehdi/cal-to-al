@@ -2,7 +2,7 @@
   "name": "cal-to-al",
   "displayName": "CAL to AL Converter",
   "description": "Convert NAV C/AL .txt files to AL Business Central objects.",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "publisher": "TAHERElMehdi",
   "icon": "assets/logo.png",
   "engines": {
