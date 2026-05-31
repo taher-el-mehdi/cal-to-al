@@ -35,6 +35,15 @@ function ensureDir(dir: string): void {
   }
 }
 
+// Set to true only while developing the extension; keep false for production installs.
+const DEVELOPMENT_MODE = false;
+
+function debugLog(message: string): void {
+  if (!DEVELOPMENT_MODE) return;
+  outputChannel.appendLine(`[DEBUG] ${message}`);
+  console.log(`[calToAl DEBUG] ${message}`);
+}
+
 /**
  * Resolve the path to txt2al.exe.
  * Priority: configured path > workspace bin > parent directory bin > extension bin.
@@ -154,11 +163,11 @@ async function loadObjectMapping(
 ): Promise<Map<string, string>> {
   const mappingPath = resolveObjectMappingPath(context, workspaceRoot);
   if (!mappingPath) {
-    outputChannel.appendLine('[DEBUG] object-mapping.json not found in configured or default locations.');
+    debugLog('object-mapping.json not found in configured or default locations.');
     return new Map();
   }
 
-  outputChannel.appendLine(`[DEBUG] object-mapping.json resolved to: ${mappingPath}`);
+  debugLog(`object-mapping.json resolved to: ${mappingPath}`);
 
   try {
     const raw = await fs.promises.readFile(mappingPath, 'utf8');
@@ -398,15 +407,14 @@ async function runConversion(context: vscode.ExtensionContext, resource: vscode.
 
   const objectMapping = await loadObjectMapping(context, workspaceRoot);
 
-  // Debug: log objectMapping to output channel
-  // outputChannel.appendLine(`[DEBUG] objectMapping size: ${objectMapping.size}`);
-  // if (objectMapping.size > 0) {
-    // outputChannel.appendLine('[DEBUG] objectMapping contents:');
-    // for (const [key, value] of objectMapping.entries()) {
-    //   outputChannel.appendLine(`  "${key}" → "${value}"`);
-    // }
-    // outputChannel.show(true); // bring output channel to front
-  // }
+  // Developer debug logging
+  debugLog(`objectMapping size: ${objectMapping.size}`);
+  if (objectMapping.size > 0) {
+    debugLog('objectMapping contents:');
+    for (const [key, value] of objectMapping.entries()) {
+      debugLog(`  "${key}" → "${value}"`);
+    }
+  }
 
   try {
     await vscode.window.withProgress({
